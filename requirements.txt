@@ -1,0 +1,6 @@
+numpy
+pandas
+pylab
+matplotlib
+radvel
+cpsutils

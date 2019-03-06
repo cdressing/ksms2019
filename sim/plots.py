@@ -1,8 +1,5 @@
 import pylab as pl
-
-
-
-def histograms(spf, filters, outfile='./fig_target-dist.pdf'):
+def histograms(spf):
     bins = 20
 
     fig = pl.figure(figsize=(16,10.5))
@@ -44,16 +41,16 @@ def histograms(spf, filters, outfile='./fig_target-dist.pdf'):
     ax = pl.subplot(3,3,6)
     ax.axis('off')
 
-    pl.annotate('Filters:\n{}'.format(filters), xy=(0.1, 0.6))
+    #pl.annotate('Filters:\n{}'.format(filters), xy=(0.1, 0.6))
     # pl.annotate('50 brightest\n+{} closest\n+all multis ({})\n+all USPs ({})'.format(len(close),
     #                                                                                  len(multi),
     #                                                                                  len(usp)),
     #             xy=(0.1, 0.0))
 
-    pl.savefig(outfile)
+    #pl.savefig(outfile)
 
 
-def scatter_plots(spf, outfile='./fig_target-scatter.pdf'):
+def scatter_plots(spf):
     fig = pl.figure(figsize=(16, 8.5))
     pl.subplots_adjust(hspace=0.5, wspace=0.4)
 
@@ -122,8 +119,7 @@ def scatter_plots(spf, outfile='./fig_target-scatter.pdf'):
     # pl.xticks([3, 10, 30, 100], [3, 10, 30, 100])
     # pl.xlim(-0.5, 0.5)
     # pl.ylim(1, 1.7)
-
-    pl.savefig(outfile)
+    #pl.savefig(outfile)
 
 
 def hr_plot(spf):

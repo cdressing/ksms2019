@@ -1,1 +1,1 @@
-# ksms2019
+# Code for the KSMS proposal in 2019A

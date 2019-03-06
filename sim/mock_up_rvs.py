@@ -1,6 +1,3 @@
-import cpsutils.kbc
-import cpsutils.io
-from cpsutils.hires import exposure
 import pandas as pd
 from astropy.time import Time
 import numpy as np

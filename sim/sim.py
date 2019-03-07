@@ -5,8 +5,12 @@ import numpy as np
 from sim.hires import exposure
 from sim.starlist import counts_to_err
 
+
+# Global survey setup
 kexp = 250  # maximum exp counts
 nobs = 60  # number of observations per target
+hours_in_night = 8
+
 
 def load_candidates():
     simulated_planets = '../data/barclay+CTL.csv'
@@ -54,7 +58,7 @@ def load_candidates():
     sp['exptime'] += exposure.exposure_time(sp['Vmag'].values, 3*kexp, iod=False)  # template 3*normal obs
 
     sp['jitter'] = np.sqrt(counts_to_err(sp['kexp'].values)**2 + \
-                           np.random.uniform(1.0, 4.0, size=len(sp))**2)  # random jitter from 1.0 to 7.0 m/s jitter
+                           np.random.uniform(1.0, 4.0, size=len(sp))**2)  # random jitter from 1.0 to 4.0 m/s jitter
     sp['Ksig'] = (sp['Kp'] * np.sqrt(nobs)) / sp['jitter']
     sp['Kerr'] = sp['jitter'] / np.sqrt(nobs)
 
@@ -64,19 +68,30 @@ def load_candidates():
 
 class Sample(object):
     def __init__(self, df):
-        self.df = df.copy() # protect the size/order of input
+        self.df = df.copy()  # protect the size/order of input
 
+    def get_sample_statistics(self):
+        sample = self.get_sample()
+        num_nights = sample.exptime.sum() / (hours_in_night*3600)
+        num_targets = sample.TICID.count()
+        s = """\
+name = {}
+description = {}
+num_nights = {}
+num_targets = {}
+        """.format(self.name, self.description, num_nights,num_targets)
+        return s
 
 ## Define your sample here
 ## Each sample has a function in_sample() that returns true if star is in the sample
-
 class SampleBright(Sample):
     name = 'bright'
     description = 'Brightest 50 sun-like stars'
     def in_sample(self):
         b = pd.Series(False, index=self.df.index) 
-        filters = """_DEJ2000 > 0 and Teff < 6100 and Vmag < 13.0 and Kp > 2.0 and Rs < 1.5 and Rp < 12 and  Ksig > 4.0"""
-        idx = self.df.query(filters).sort_values(by='Vmag').iloc[:50].index
+        filters = \
+            """_DEJ2000 > 0 and Teff < 6100 and Vmag < 13.0 and Kp > 2.0 and Rs < 1.5 and Rp < 12 and  Ksig > 4.0"""
+        idx = self.df.query(filters).sort_values(by='Vmag').iloc[:48].index
         b.loc[idx] = True
         return b
 
@@ -87,7 +102,7 @@ class SampleClose(Sample):
     def in_sample(self):
         df = self.df.copy()
         b = pd.Series(False, index=self.df.index) 
-        idx = self.df.query('_DEJ2000 > 0 and Vmag < 13 and Rs < 1.5').sort_values(by='Dist').iloc[:10].index
+        idx = self.df.query('_DEJ2000 > 0 and Vmag < 13 and Rs < 0.7').sort_values(by='Dist').iloc[:8].index
         b.loc[idx] = True
         return b
 
@@ -97,7 +112,7 @@ class SampleMulti(Sample):
     description = 'Brightest 10 multis'
     def in_sample(self):
         b = pd.Series(False, index=self.df.index) 
-        idx = self.df.query('Npl > 1').sort_values(by='Vmag').iloc[:10].index
+        idx = self.df.query('Npl > 1').sort_values(by='Vmag').iloc[:25].index
         b.loc[idx] = True
         return b
 
@@ -106,7 +121,7 @@ class SampleUSP(Sample):
     description = 'Brightest 5 USPs'
     def in_sample(self):
         b = pd.Series(False, index=self.df.index) 
-        idx = self.df.query('Perp < 1.5 and Rp < 2').sort_values(by='Vmag').iloc[:5].index
+        idx = self.df.query('Perp < 1.5 and Rp < 2').sort_values(by='Vmag').iloc[:8].index
         b.loc[idx] = True
         return b
 
@@ -146,7 +161,7 @@ def combine_samples(df):
 def get_sample_statistics(sample):
     nplanets = len(sample)
     sample = sample.groupby('TICID').first() # only count stars once
-    nnights = sample.exptime.sum() / (10*3600)
+    nnights = sample.exptime.sum() / (hours_in_night*3600)
     nstars = len(sample)
     s = """\
 nstars = {:.0f}, nplanets={:.0f}, nnights = {:.1f},

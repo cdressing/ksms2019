@@ -82,6 +82,8 @@ num_targets = {}
         """.format(self.name, self.description, num_nights,num_targets)
         return s
 
+## Define your sample here
+## Each sample has a function in_sample() that returns true if star is in the sample
 class SampleBright(Sample):
     name = 'bright'
     description = 'Brightest 50 sun-like stars'
@@ -93,7 +95,7 @@ class SampleBright(Sample):
         b.loc[idx] = True
         return b
 
-## Perhaps we want to turn this sample into an M-dwarf selection
+## Perhaps we should target the M-dwarfs specifically here
 class SampleClose(Sample):
     name = 'close'
     description = '10 closest dwarfs that are bighter than V < 13'
@@ -104,6 +106,7 @@ class SampleClose(Sample):
         b.loc[idx] = True
         return b
 
+## 
 class SampleMulti(Sample):
     name = 'multi'
     description = 'Brightest 10 multis'

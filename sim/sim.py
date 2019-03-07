@@ -62,32 +62,77 @@ def load_candidates():
     return sp
 
 
-def construct_sample(sp):
+class Sample(object):
+    def __init__(self, df):
+        self.df = df 
 
+    def apply_global_cuts(self):
+        df = self.df.copy()
+        filters = """_DEJ2000 > 0"""
+        return df.query(filters)
+
+    def get_sample_statistics(self):
+        sample = self.get_sample()
+        num_nights = sample.exptime.sum() / (10*3600)
+        num_targets = sample.TICID.count()
+        s = """\
+name = {}
+description = {}
+num_nights = {}
+num_targets = {}
+        """.format(self.name, self.description, num_nights,num_targets)
+        return s
+
+class SampleBright(Sample):
+    name = 'bright'
+    description = 'Brightest 50 sun-like stars'
+    def get_sample(self):
+        df = self.apply_global_cuts()
+        filters = """Teff < 6100 and Vmag < 13.0 and Kp > 2.0 and Rs < 1.5 and Rp < 12 and  Ksig > 4.0"""
+        df = df.query(filters).sort_values(by='Vmag').iloc[:50]
+        return df 
+
+
+## Perhaps we want to turn this sample into an M-dwarf selection
+class SampleClose(Sample):
+    name = 'close'
+    description = '10 closest dwarfs that are bighter than V < 13'
+    def get_sample(self):
+        df = self.apply_global_cuts()
+        df = df.query('Vmag < 13 and Rs < 1.5').sort_values(by='Dist').iloc[:10]
+        return df 
+
+class SampleMulti(Sample):
+    name = 'multi'
+    description = 'Brightest 10 multis'
+    def get_sample(self):
+        df = self.apply_global_cuts()
+        df = df.query('Npl > 1').sort_values(by='Vmag').iloc[:10]
+        return df 
+
+class SampleUSP(Sample):
+    name = 'usp'
+    description = 'Brightest 5 USPs'
+    def get_sample(self):
+        df = self.apply_global_cuts()
+        df = df.query('Perp < 1.5 and Rp < 2').sort_values(by='Vmag').iloc[:5]
+        return df 
+
+TKS_Samples = [SampleBright, SampleClose, SampleMulti, SampleUSP]
+
+class SampleTKS(Sample):
+    name = 'tks'
+    description = 'Total sample'
+    def get_sample(self,verbose=False):
+        tks = []
+        for Sample in TKS_Samples:
+            s = Sample(self.df) 
+            if verbose:
+                print('adding')
+                print(s.get_sample_statistics())
+            tks.append(s.get_sample())
+
+        tks = pd.concat(tks)
+        tks = tks.drop_duplicates()
+        return tks
     
-    filters = """_DEJ2000 > 0
-    Teff < 6100
-    Vmag < 13.5
-    Kp > 2.0
-    Rs < 1.5
-    Rp < 12
-    Ksig > 4.0"""
-
-    for filt in filters.split('\n'):
-        print(filt)
-        sp = sp.query(filt)
-
-    spf = sp.iloc[:50]  # n brightest
-    close = sp.sort_values(by='Dist').iloc[:50]
-    spf = pd.concat([spf, close])  # +n closest
-    # spf = pd.concat([spf, sp.sort_values(by='Rp').iloc[:27]])  # +n smallest
-    multi = sp.query('Npl > 1')
-    usp = sp.query('Perp < 1.5')
-    spf = pd.concat([spf, multi])
-    spf = pd.concat([spf, usp])
-    spf = spf.drop_duplicates()
-
-    num_nights = (spf.exptime.sum() / (10*3600))
-    num_targets = spf.TICID.count()
-    print(spf.TICID.count(), (spf.exptime.sum() / (10*3600)), spf.Ksig.min())
-    return spf

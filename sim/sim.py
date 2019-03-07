@@ -62,32 +62,101 @@ def load_candidates():
     return sp
 
 
-def construct_sample(sp):
+class Sample(object):
+    def __init__(self, df):
+        self.df = df.copy() # protect the size/order of input
 
+    def get_sample_statistics(self):
+        sample = self.get_sample()
+        num_nights = sample.exptime.sum() / (10*3600)
+        num_targets = sample.TICID.count()
+        s = """\
+name = {}
+description = {}
+num_nights = {}
+num_targets = {}
+        """.format(self.name, self.description, num_nights,num_targets)
+        return s
+
+class SampleBright(Sample):
+    name = 'bright'
+    description = 'Brightest 50 sun-like stars'
+    def in_sample(self):
+        b = pd.Series(False, index=self.df.index) 
+        filters = """_DEJ2000 > 0 and Teff < 6100 and Vmag < 13.0 and Kp > 2.0 and Rs < 1.5 and Rp < 12 and  Ksig > 4.0"""
+        idx = self.df.query(filters).sort_values(by='Vmag').iloc[:50].index
+        b.loc[idx] = True
+        return b
+
+## Perhaps we want to turn this sample into an M-dwarf selection
+class SampleClose(Sample):
+    name = 'close'
+    description = '10 closest dwarfs that are bighter than V < 13'
+    def in_sample(self):
+        df = self.df.copy()
+        b = pd.Series(False, index=self.df.index) 
+        idx = self.df.query('_DEJ2000 > 0 and Vmag < 13 and Rs < 1.5').sort_values(by='Dist').iloc[:10].index
+        b.loc[idx] = True
+        return b
+
+class SampleMulti(Sample):
+    name = 'multi'
+    description = 'Brightest 10 multis'
+    def in_sample(self):
+        b = pd.Series(False, index=self.df.index) 
+        idx = self.df.query('Npl > 1').sort_values(by='Vmag').iloc[:10].index
+        b.loc[idx] = True
+        return b
+
+class SampleUSP(Sample):
+    name = 'usp'
+    description = 'Brightest 5 USPs'
+    def in_sample(self):
+        b = pd.Series(False, index=self.df.index) 
+        idx = self.df.query('Perp < 1.5 and Rp < 2').sort_values(by='Vmag').iloc[:5].index
+        b.loc[idx] = True
+        return b
+
+TKS_Samples = [SampleBright, SampleClose, SampleMulti, SampleUSP]
+def combine_samples(df):
+    df['inany'] = False
+    innames = []
+    names = []
+    for Sample in TKS_Samples:
+        s = Sample(df) 
+        names.append(s.name)
+        inname = 'in'+s.name
+        df[inname] = s.in_sample()
+        df['inany'] = df['inany'] | df[inname]
+        innames.append(inname)
     
-    filters = """_DEJ2000 > 0
-    Teff < 6100
-    Vmag < 13.5
-    Kp > 2.0
-    Rs < 1.5
-    Rp < 12
-    Ksig > 4.0"""
+    df['nprograms'] = df[innames].sum(axis=1)
+    for name in names:
+        inname = 'in'+ name
+        sample = df[df[inname]]
+        print('in ' + name)
+        print(get_sample_statistics(sample))
 
-    for filt in filters.split('\n'):
-        print(filt)
-        sp = sp.query(filt)
+        print('only in ' + name)
+        sample = df[df[inname] & (df['nprograms']==1)]
+        print(get_sample_statistics(sample))
 
-    spf = sp.iloc[:50]  # n brightest
-    close = sp.sort_values(by='Dist').iloc[:50]
-    spf = pd.concat([spf, close])  # +n closest
-    # spf = pd.concat([spf, sp.sort_values(by='Rp').iloc[:27]])  # +n smallest
-    multi = sp.query('Npl > 1')
-    usp = sp.query('Perp < 1.5')
-    spf = pd.concat([spf, multi])
-    spf = pd.concat([spf, usp])
-    spf = spf.drop_duplicates()
+    sample = df[df['inany']]
+    print('-'*80)
+    print('Total')
+    print(get_sample_statistics(sample))
 
-    num_nights = (spf.exptime.sum() / (10*3600))
-    num_targets = spf.TICID.count()
-    print(spf.TICID.count(), (spf.exptime.sum() / (10*3600)), spf.Ksig.min())
-    return spf
+    print('Program overlap')
+    print(df.groupby('nprograms').size())
+    return df
+
+def get_sample_statistics(sample):
+    nplanets = len(sample)
+    sample = sample.groupby('TICID').first() # only count stars once
+    nnights = sample.exptime.sum() / (10*3600)
+    nstars = len(sample)
+    s = """\
+nstars = {:.0f}, nplanets={:.0f}, nnights = {:.1f},
+    """.format(nstars,nplanets,nnights)
+    return s
+

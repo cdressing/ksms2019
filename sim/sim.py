@@ -89,7 +89,7 @@ class SampleBright(Sample):
         b = pd.Series(False, index=self.df.index) 
         filters = \
             """_DEJ2000 > 0 and Teff < 6100 and Vmag < 13.0 and Kp > 2.0 and Rs < 1.5 and Rp < 12 and  Ksig > 4.0"""
-        idx = self.df.query(filters).sort_values(by='Vmag').iloc[:25].index
+        idx = self.df.query(filters).sort_values(by='Vmag').iloc[:48].index
         b.loc[idx] = True
         return b
 
@@ -100,7 +100,7 @@ class SampleClose(Sample):
     def in_sample(self):
         df = self.df.copy()
         b = pd.Series(False, index=self.df.index) 
-        idx = self.df.query('_DEJ2000 > 0 and Vmag < 13 and Rs < 0.7').sort_values(by='Dist').iloc[:25].index
+        idx = self.df.query('_DEJ2000 > 0 and Vmag < 13 and Rs < 0.7').sort_values(by='Dist').iloc[:8].index
         b.loc[idx] = True
         return b
 
@@ -118,7 +118,7 @@ class SampleUSP(Sample):
     description = 'Brightest 5 USPs'
     def in_sample(self):
         b = pd.Series(False, index=self.df.index) 
-        idx = self.df.query('Perp < 1.5 and Rp < 2').sort_values(by='Vmag').iloc[:15].index
+        idx = self.df.query('Perp < 1.5 and Rp < 2').sort_values(by='Vmag').iloc[:8].index
         b.loc[idx] = True
         return b
 

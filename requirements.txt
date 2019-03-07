@@ -3,4 +3,3 @@ pandas
 pylab
 matplotlib
 radvel
-cpsutils

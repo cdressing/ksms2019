@@ -111,11 +111,33 @@ class SampleBright(Sample):
 ## Perhaps we should target the M-dwarfs specifically here
 class SampleClose(Sample):
     name = 'close'
-    description = '10 closest dwarfs that are bighter than V < 13'
+    description = '10 closest dwarfs that are brighter than V < 13'
     def in_sample(self):
         df = self.df.copy()
         b = pd.Series(False, index=self.df.index) 
         idx = self.df.query('_DEJ2000 > 0 and Vmag < 13 and Rs < 0.7').sort_values(by='Dist').iloc[:8].index
+        b.loc[idx] = True
+        return b
+    
+class SampleCool(Sample):
+    name = 'cooldwarfs'
+    description = 'Coolest small planets orbiting stars brighter than V=15'
+    def in_sample(self):
+        df = self.df.copy()
+        b = pd.Series(False, index=self.df.index) 
+        #Insolation < 1.52 F_Earth corresponds to the recent Venus limit
+        idx = self.df.query('Insol < 10 and Rp < 2.5 and Vmag < 15').sort_values(by='Vmag').iloc[:8].index
+        b.loc[idx] = True
+        return b
+    
+class SampleHabitable(Sample):
+    name = 'habsystems'
+    description = 'All systems with potentially habitable planets and host stars brighter than V = 15'
+    def in_sample(self):
+        df = self.df.copy()
+        b = pd.Series(False, index=self.df.index) 
+        #Insolation < 1.52 F_Earth corresponds to the recent Venus limit
+        idx = self.df.query('Insol < 1.52 and Vmag < 15').sort_values(by='Insol').iloc[:99].index
         b.loc[idx] = True
         return b
 
@@ -138,7 +160,7 @@ class SampleUSP(Sample):
         b.loc[idx] = True
         return b
 
- class SampleBrightShallow(Sample):
+class SampleBrightShallow(Sample):
     name = 'brightshallow'
     description = 'Brightest 200 sun-like stars'
     def in_sample(self):
@@ -148,7 +170,7 @@ class SampleUSP(Sample):
         b.loc[idx] = True
         return b
 
-TKS_Samples = [SampleBright, SampleClose, SampleMulti, SampleUSP]
+TKS_Samples = [SampleBright, SampleClose, SampleMulti, SampleUSP, SampleCool, SampleHabitable]
 def combine_samples(df):
     df['inany'] = False
     innames = []

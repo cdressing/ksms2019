@@ -2,69 +2,82 @@ import pandas as pd
 from sim import mock_up_rvs
 import radvel
 import numpy as np
-from sim.hires import exposure
-from sim.starlist import counts_to_err
 
-
+import sim.hires.exposure
 # Global survey setup
-kexp = 250  # maximum exp counts
-nobs = 60  # number of observations per target
 hours_in_night = 8
 
+def counts_to_err(counts):
+    '''Compute the expected RV error for an iodine-in observation, scaling from 2.5 m/s at 250k counts'''
+    return 2 / np.sqrt(counts/60)
 
 def load_candidates():
     simulated_planets = '../data/barclay+CTL.csv'
-    sp = pd.read_csv(simulated_planets, comment="#")
+    df = pd.read_csv(simulated_planets, comment="#")
    
-    units = dict(sp.iloc[0])
-    sp = sp.iloc[2:]
+    units = dict(df.iloc[0])
+    df = df.iloc[2:]
    
-    for col in sp.columns:
+    for col in df.columns:
         try:
-            sp[col] = sp[col].values.astype(float)
+            df[col] = df[col].values.astype(float)
         except ValueError:
             continue
    
-    # sp = sp.merge(ctl, on='TICID', how='left', suffixes=['', '_tic'])
-    isp = sp.copy()
+    # df = df.merge(ctl, on='TICID', how='left', suffixes=['', '_tic'])
+    idf = df.copy()
     
     ## Perform some calculations with the columns
 
-    multis = sp.groupby('TICID').count().sort_values(by='Vmag', ascending=False).query('Vmag > 1').reset_index()
+    multis = df.groupby('TICID').count().sort_values(by='Vmag', ascending=False).query('Vmag > 1').reset_index()
     multis['Npl'] = multis['Vmag']
     multis = multis[['TICID', 'Npl']]
-    sp = pd.merge(sp, multis, on='TICID', how='left')
+    df = pd.merge(df, multis, on='TICID', how='left')
 
-    sp['Rs'] = sp['R*'].values
-    sp['Mp'] = mock_up_rvs.calc_mp(sp['Rp'].values)
-    sp['Kp'] = radvel.utils.semi_amplitude(sp['Mp'].values, 
-                                           sp['Perp'].values, 
-                                           sp['R*'].values,   # R* for M*
-                                           sp['Ecc'].values,
+    df['Rs'] = df['R*'].values
+    df['Mp'] = mock_up_rvs.calc_mp(df['Rp'].values)
+    df['Kp'] = radvel.utils.semi_amplitude(df['Mp'].values, 
+                                           df['Perp'].values, 
+                                           df['R*'].values,   # R* for M*
+                                           df['Ecc'].values,
                                            Msini_units='earth')
-    sp['a'] = (sp['mass'] * (sp['Perp'] / 365.) ** 2.) ** (1. / 3.)
-    sp['sinc'] = (sp['Teff'] / 5778.) ** 4.0 * (sp['R*'] / sp['a']) ** 2.0
+    df['a'] = (df['mass'] * (df['Perp'] / 365.) ** 2.) ** (1. / 3.)
+    df['sinc'] = (df['Teff'] / 5778.) ** 4.0 * (df['R*'] / df['a']) ** 2.0
+    return df
 
 
-    exp = np.clip(exposure.exposure_time(sp['Vmag'].values, kexp, iod=True), 0, 2700) 
-
-    kexp_list = [exposure.exposure_counts(v, e, iod=True) for v, e in zip(sp['Vmag'].values, exp)]
-
-    # for v, e in zip(sp['Vmag'].values, exp):
-    #     print(v, e, exposure.exposure_counts(v, e, iod=True))
-    sp['kexp'] = kexp_list
-
-    sp['exptime'] =  exp * nobs  
-    sp['exptime'] += exposure.exposure_time(sp['Vmag'].values, 3*kexp, iod=False)  # template 3*normal obs
-
-    sp['jitter'] = np.sqrt(counts_to_err(sp['kexp'].values)**2 + \
-                           np.random.uniform(1.0, 4.0, size=len(sp))**2)  # random jitter from 1.0 to 4.0 m/s jitter
-    sp['Ksig'] = (sp['Kp'] * np.sqrt(nobs)) / sp['jitter']
-    sp['Kerr'] = sp['jitter'] / np.sqrt(nobs)
-
-    sp = sp.sort_values(by='Vmag').reset_index()
-    return sp
-
+def add_exptime(df, method):
+    """
+    nobs = 60  # number of observations per target
+    """
+    if method=='nobs=60-counts=ramp':
+        kexp = 250  # maximum exp counts
+        nobs = 60
+        kexp = np.array([sim.hires.exposure.exp_ramp(v) for v  in df['Vmag']])
+        exp = sim.hires.exposure.exposure_time(df['Vmag'], kexp, iod=True)
+        exp = np.clip(exp, 0, 20*60) # clip at max time
+        kexp = [sim.hires.exposure.exposure_counts(v, e, iod=True) for v, e in zip(df['Vmag'], exp)]
+        kexp = np.array(kexp)
+        
+    elif method=='nobs=30-counts=60':
+        kexp = 60  # maximum exp counts
+        nobs = 30
+        exp = sim.hires.exposure.exposure_time(df['Vmag'], kexp, iod=True)
+        exp = np.clip(exp, 0, 15*60) # clip at max time
+        kexp = [sim.hires.exposure.exposure_counts(v, e, iod=True) for v, e in zip(df['Vmag'], exp)]
+        kexp = np.array(kexp)
+    else:
+        assert False, "Invalid method"
+    df['kexp'] = kexp
+    df['exptime'] =  exp * nobs # iodine in exposure
+    df['exptime'] += sim.hires.exposure.exposure_time(df['Vmag'], 3*kexp, iod=False) # template exposure
+    df['sigmajit'] = np.random.uniform(1.0, 4.0, size=len(df))
+    df['sigmaphot'] = counts_to_err(df['kexp'])
+    df['sigmarv'] = df.eval('sqrt(sigmajit**2 + sigmaphot**2)')
+    df['Kerr'] = df['sigmarv'] / np.sqrt(nobs)
+    df['Ksig'] = df.eval('Kp / Kerr')
+    df = df.sort_values(by='Vmag').reset_index()
+    return df
 
 class Sample(object):
     def __init__(self, df):
@@ -122,6 +135,16 @@ class SampleUSP(Sample):
     def in_sample(self):
         b = pd.Series(False, index=self.df.index) 
         idx = self.df.query('Perp < 1.5 and Rp < 2').sort_values(by='Vmag').iloc[:8].index
+        b.loc[idx] = True
+        return b
+
+ class SampleBrightShallow(Sample):
+    name = 'brightshallow'
+    description = 'Brightest 200 sun-like stars'
+    def in_sample(self):
+        b = pd.Series(False, index=self.df.index) 
+        filters = "Teff < 6100 and Vmag < 13.0 and Kp > 2.0 and Rs < 1.5 and  Ksig > 4.0"
+        idx = self.df.query(filters).sort_values(by='Vmag').iloc[:200].index
         b.loc[idx] = True
         return b
 
